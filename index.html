@@ -1,0 +1,1399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Algorithmic Art Generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: #f5f5f7;
+            min-height: 100vh;
+            color: #1d1d1f;
+            line-height: 1.5;
+            overflow-x: hidden;
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        .header {
+            margin-bottom: 24px;
+        }
+
+        .header h1 {
+            font-size: 1.375rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #0071e3 0%, #5e5ce6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-size: 200% 200%;
+            animation: shimmer 3s ease-in-out infinite;
+        }
+
+        .header p {
+            font-size: 0.8125rem;
+            color: #86868b;
+            font-weight: 400;
+            line-height: 1.4;
+        }
+
+        /* Empty state */
+        .empty-state {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #86868b;
+            pointer-events: none;
+            transition: all 0.3s ease;
+        }
+
+        .empty-state svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+            opacity: 0.3;
+            stroke-width: 1.5;
+        }
+
+        .empty-state p {
+            font-size: 1.125rem;
+            font-weight: 400;
+            opacity: 0.8;
+        }
+
+        .empty-state.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 340px 1fr;
+            gap: 24px;
+            height: calc(100vh - 60px);
+            max-height: 900px;
+        }
+
+        .canvas-container {
+            background: white;
+            border-radius: 18px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.04);
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+        }
+
+        .canvas-container:hover {
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+            border-color: #e5e5e7;
+        }
+
+        .canvas-tabs {
+            display: flex;
+            background: transparent;
+            padding: 8px;
+            gap: 8px;
+            position: relative;
+        }
+
+        .canvas-tabs::before {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 8px;
+            right: 8px;
+            height: 1px;
+            background: #e5e5e7;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 14px 24px;
+            text-align: center;
+            cursor: pointer;
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-size: 0.9375rem;
+            font-weight: 500;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: none;
+            background: transparent;
+            color: #86868b;
+            border-radius: 0;
+            position: relative;
+            overflow: visible;
+        }
+
+        .tab::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: #0071e3;
+            border-radius: 3px 3px 0 0;
+            transform: scaleX(0);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .tab.active::after {
+            transform: scaleX(1);
+        }
+
+        .tab.active {
+            color: #1d1d1f;
+        }
+
+        .tab:hover:not(.active) {
+            color: #1d1d1f;
+            background: rgba(0, 0, 0, 0.02);
+            border-radius: 8px;
+        }
+
+        /* Tab icons */
+        .tab-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .tab-icon {
+            width: 20px;
+            height: 20px;
+            opacity: 0.8;
+            transition: opacity 0.2s ease;
+        }
+
+        .tab.active .tab-icon {
+            opacity: 1;
+        }
+
+        .canvas-wrapper {
+            height: calc(100% - 68px);
+            position: relative;
+            overflow: hidden;
+            background: #fafafa;
+            border-radius: 0 0 18px 18px;
+            transition: opacity 0.15s ease;
+        }
+
+        canvas {
+            display: block;
+            cursor: crosshair;
+            width: 100%;
+            height: 100%;
+            background: white;
+            transition: cursor 0.2s ease;
+        }
+
+        canvas.drawing {
+            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><circle cx="10" cy="10" r="8" fill="none" stroke="%23333" stroke-width="2"/></svg>') 10 10, crosshair;
+        }
+
+        .controls {
+            background: white;
+            border-radius: 18px;
+            padding: 32px;
+            overflow-y: auto;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.04);
+            transition: box-shadow 0.3s ease;
+        }
+
+        .controls:hover {
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+        }
+
+        .controls::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .controls::-webkit-scrollbar-track {
+            background: #f5f5f7;
+            border-radius: 4px;
+        }
+
+        .controls::-webkit-scrollbar-thumb {
+            background: #d2d2d7;
+            border-radius: 4px;
+            transition: background 0.2s ease;
+        }
+
+        .controls::-webkit-scrollbar-thumb:hover {
+            background: #b4b4b9;
+        }
+
+        .control-group {
+            margin-bottom: 32px;
+            animation: fadeIn 0.4s ease-out;
+            animation-fill-mode: both;
+        }
+
+        .control-group:nth-child(1) { animation-delay: 0.1s; }
+        .control-group:nth-child(2) { animation-delay: 0.2s; }
+        .control-group:nth-child(3) { animation-delay: 0.3s; }
+        .control-group:nth-child(4) { animation-delay: 0.4s; }
+
+        .control-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .control-group h3 {
+            margin-bottom: 16px;
+            color: #1d1d1f;
+            font-size: 0.875rem;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .control-group h3::before {
+            content: '';
+            width: 4px;
+            height: 16px;
+            background: linear-gradient(135deg, #0071e3 0%, #5e5ce6 100%);
+            border-radius: 2px;
+        }
+
+        .algorithm-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .algorithm-btn {
+            padding: 14px;
+            border: 1px solid #d2d2d7;
+            border-radius: 12px;
+            background: white;
+            cursor: pointer;
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-size: 0.9375rem;
+            font-weight: 400;
+            transition: all 0.2s ease;
+            text-align: center;
+            color: #1d1d1f;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .algorithm-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 113, 227, 0.08);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .algorithm-btn:hover::before {
+            opacity: 1;
+        }
+
+        .algorithm-btn:hover {
+            border-color: #0071e3;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 113, 227, 0.15);
+        }
+
+        .algorithm-btn.active {
+            background: #0071e3;
+            color: white;
+            border-color: #0071e3;
+            animation: pulse 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 113, 227, 0.25);
+        }
+
+        .algorithm-btn.active:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(0, 113, 227, 0.35);
+        }
+
+        .algorithm-btn span {
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Tooltips */
+        .tooltip {
+            position: relative;
+        }
+
+        .tooltip::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%) translateY(-8px);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+
+        .tooltip:hover::after {
+            opacity: 1;
+            transform: translateX(-50%) translateY(-4px);
+        }
+
+        .slider-container {
+            margin-bottom: 20px;
+        }
+
+        .slider-container label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            font-size: 0.9375rem;
+            color: #1d1d1f;
+            font-weight: 400;
+        }
+
+        .slider-container label span {
+            font-weight: 500;
+            color: #0071e3;
+            min-width: 40px;
+            text-align: right;
+            transition: transform 0.2s ease;
+        }
+
+        .slider-container:hover label span {
+            transform: scale(1.1);
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 4px;
+            border-radius: 2px;
+            background: #d2d2d7;
+            outline: none;
+            -webkit-appearance: none;
+            transition: background 0.2s ease;
+        }
+
+        input[type="range"]:hover {
+            background: #b4b4b9;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: white;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+            border: 1px solid #d2d2d7;
+            transition: all 0.2s ease;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            transform: scale(1.2);
+            background: #0071e3;
+            border-color: #0071e3;
+        }
+
+        .color-picker-container {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .color-picker-wrapper {
+            position: relative;
+            flex: 1;
+        }
+
+        .color-label {
+            font-size: 0.8125rem;
+            color: #86868b;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        input[type="color"] {
+            width: 100%;
+            height: 48px;
+            border: 1px solid #d2d2d7;
+            border-radius: 12px;
+            cursor: pointer;
+            padding: 4px;
+            background: white;
+            transition: all 0.2s ease;
+        }
+
+        input[type="color"]:hover {
+            border-color: #0071e3;
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(0, 113, 227, 0.15);
+        }
+
+        input[type="color"]::-webkit-color-swatch-wrapper {
+            padding: 4px;
+        }
+
+        input[type="color"]::-webkit-color-swatch {
+            border-radius: 8px;
+            border: none;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 12px;
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-size: 0.9375rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 8px;
+            letter-spacing: -0.01em;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary {
+            background: #0071e3;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #0077ed;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(0, 113, 227, 0.3);
+        }
+
+        .btn-primary:active {
+            background: #006edb;
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(0, 113, 227, 0.2);
+        }
+
+        .btn-secondary {
+            background: #f5f5f7;
+            color: #1d1d1f;
+            border: 1px solid #d2d2d7;
+        }
+
+        .btn-secondary:hover {
+            background: #ffffff;
+            border-color: #b4b4b9;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .btn-secondary:active {
+            background: #e8e8ed;
+            transform: translateY(0);
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+        }
+
+        /* Loading state */
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: none;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #f5f5f7;
+            border-top-color: #0071e3;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .drawing-indicator {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.8125rem;
+            font-weight: 500;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .drawing-indicator.active {
+            opacity: 1;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        /* Success message */
+        .success-message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #34c759;
+            color: white;
+            padding: 16px 24px;
+            border-radius: 12px;
+            font-weight: 500;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+            box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
+        }
+
+        .success-message.show {
+            transform: translateX(0);
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .main-content {
+                grid-template-columns: 1fr;
+                grid-template-rows: 1fr auto;
+                gap: 16px;
+            }
+            
+            .controls {
+                max-height: 400px;
+                padding: 24px;
+            }
+
+            .algorithm-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .success-message {
+                top: auto;
+                bottom: 20px;
+                right: 20px;
+                left: 20px;
+                transform: translateY(100px);
+            }
+
+            .success-message.show {
+                transform: translateY(0);
+            }
+
+            .tab-content {
+                flex-direction: column;
+                gap: 4px;
+            }
+
+            .tab-content span {
+                font-size: 0.75rem;
+            }
+
+            .tab {
+                padding: 12px 16px;
+            }
+
+            .canvas-tabs {
+                padding: 6px;
+                gap: 6px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="main-content">
+            <div class="controls">
+                <div class="header">
+                    <h1>Algorithmic Art Generator</h1>
+                    <p>Draw freely and watch algorithms transform your art into beautiful patterns</p>
+                </div>
+
+                <div class="control-group">
+                    <h3>Art Algorithms</h3>
+                    <div class="algorithm-grid">
+                        <button class="algorithm-btn active tooltip" data-algorithm="spiral" data-tooltip="Creates spiral patterns">
+                            <span>Spiral</span>
+                        </button>
+                        <button class="algorithm-btn tooltip" data-algorithm="mandala" data-tooltip="Symmetric circular patterns">
+                            <span>Mandala</span>
+                        </button>
+                        <button class="algorithm-btn tooltip" data-algorithm="fractal" data-tooltip="Self-repeating patterns">
+                            <span>Fractal</span>
+                        </button>
+                        <button class="algorithm-btn tooltip" data-algorithm="wave" data-tooltip="Flowing wave distortions">
+                            <span>Wave</span>
+                        </button>
+                        <button class="algorithm-btn tooltip" data-algorithm="particle" data-tooltip="Particle explosion effect">
+                            <span>Particle</span>
+                        </button>
+                        <button class="algorithm-btn tooltip" data-algorithm="geometric" data-tooltip="Geometric shape patterns">
+                            <span>Geometric</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <h3>Style Controls</h3>
+                    <div class="slider-container">
+                        <label>Complexity <span id="complexityValue">5</span></label>
+                        <input type="range" id="complexity" min="1" max="10" value="5">
+                    </div>
+                    <div class="slider-container">
+                        <label>Size <span id="sizeValue">2.0</span></label>
+                        <input type="range" id="sizeMultiplier" min="0.5" max="5" step="0.1" value="2">
+                    </div>
+                    <div class="slider-container">
+                        <label>Rotation <span id="rotationValue">0°</span></label>
+                        <input type="range" id="rotation" min="0" max="360" value="0">
+                    </div>
+                    <div class="slider-container">
+                        <label>Opacity <span id="opacityValue">0.8</span></label>
+                        <input type="range" id="opacity" min="0.1" max="1" step="0.1" value="0.8">
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <h3>Colors</h3>
+                    <div class="color-picker-container">
+                        <div class="color-picker-wrapper">
+                            <label class="color-label">Primary</label>
+                            <input type="color" id="primaryColor" value="#0071e3">
+                        </div>
+                        <div class="color-picker-wrapper">
+                            <label class="color-label">Secondary</label>
+                            <input type="color" id="secondaryColor" value="#5e5ce6">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <button class="btn btn-primary" id="generateArt">Generate Art</button>
+                    <button class="btn btn-secondary" id="clearCanvas">Clear Canvas</button>
+                    <button class="btn btn-secondary" id="saveArt">Save Art</button>
+                </div>
+            </div>
+
+            <div class="canvas-container">
+                <div class="canvas-tabs">
+                    <button class="tab active" data-canvas="drawing">
+                        <div class="tab-content">
+                            <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                            <span>Drawing Canvas</span>
+                        </div>
+                    </button>
+                    <button class="tab" data-canvas="result">
+                        <div class="tab-content">
+                            <svg class="tab-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span>Generated Art</span>
+                        </div>
+                    </button>
+                </div>
+                <div class="canvas-wrapper">
+                    <canvas id="drawingCanvas"></canvas>
+                    <canvas id="resultCanvas" style="display: none;"></canvas>
+                    <div class="drawing-indicator">Drawing...</div>
+                    <div class="empty-state" id="emptyState">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                        <p>Start drawing to create art</p>
+                    </div>
+                    <div class="loading" id="loading">
+                        <div class="loading-spinner"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="success-message" id="successMessage">
+        Art saved successfully!
+    </div>
+
+    <script>
+        class ArtGenerator {
+            constructor() {
+                this.initializeCanvases();
+                this.initializeControls();
+                this.initializeDrawing();
+                this.currentAlgorithm = 'spiral';
+                this.drawingData = [];
+                this.isDrawing = false;
+                this.hasDrawn = false;
+            }
+
+            initializeCanvases() {
+                this.drawingCanvas = document.getElementById('drawingCanvas');
+                this.resultCanvas = document.getElementById('resultCanvas');
+                this.drawingCtx = this.drawingCanvas.getContext('2d');
+                this.resultCtx = this.resultCanvas.getContext('2d');
+                
+                this.resizeCanvases();
+                window.addEventListener('resize', () => this.resizeCanvases());
+            }
+
+            resizeCanvases() {
+                const container = document.querySelector('.canvas-wrapper');
+                const rect = container.getBoundingClientRect();
+                
+                [this.drawingCanvas, this.resultCanvas].forEach(canvas => {
+                    canvas.width = rect.width;
+                    canvas.height = rect.height;
+                });
+                
+                this.setupDrawingCanvas();
+            }
+
+            setupDrawingCanvas() {
+                this.drawingCtx.lineCap = 'round';
+                this.drawingCtx.lineJoin = 'round';
+                this.drawingCtx.lineWidth = 2;
+                this.drawingCtx.strokeStyle = '#333';
+            }
+
+            initializeControls() {
+                // Tab switching - Fixed event delegation
+                document.querySelectorAll('.tab').forEach(tab => {
+                    tab.addEventListener('click', (e) => {
+                        const button = e.target.closest('.tab');
+                        if (!button) return;
+                        const targetCanvas = button.dataset.canvas;
+                        this.switchCanvas(targetCanvas);
+                    });
+                });
+
+                // Algorithm selection - Fixed event handling
+                document.querySelectorAll('.algorithm-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const button = e.target.closest('.algorithm-btn');
+                        if (!button) return;
+                        
+                        document.querySelectorAll('.algorithm-btn').forEach(b => b.classList.remove('active'));
+                        button.classList.add('active');
+                        this.currentAlgorithm = button.dataset.algorithm;
+                        console.log('Selected algorithm:', this.currentAlgorithm); // Debug log
+                    });
+                });
+
+                // Sliders
+                const sliders = ['complexity', 'sizeMultiplier', 'rotation', 'opacity'];
+                sliders.forEach(slider => {
+                    const element = document.getElementById(slider);
+                    const valueElement = document.getElementById(slider + 'Value');
+                    element.addEventListener('input', (e) => {
+                        let value = e.target.value;
+                        if (slider === 'rotation') value += '°';
+                        valueElement.textContent = value;
+                    });
+                });
+
+                // Buttons
+                document.getElementById('generateArt').addEventListener('click', () => this.generateArt());
+                document.getElementById('clearCanvas').addEventListener('click', () => this.clearCanvas());
+                document.getElementById('saveArt').addEventListener('click', () => this.saveArt());
+            }
+
+            initializeDrawing() {
+                const indicator = document.querySelector('.drawing-indicator');
+                
+                this.drawingCanvas.addEventListener('mousedown', (e) => this.startDrawing(e));
+                this.drawingCanvas.addEventListener('mousemove', (e) => this.draw(e));
+                this.drawingCanvas.addEventListener('mouseup', () => this.stopDrawing());
+                this.drawingCanvas.addEventListener('mouseout', () => this.stopDrawing());
+
+                // Touch events
+                this.drawingCanvas.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const mouseEvent = new MouseEvent('mousedown', {
+                        clientX: touch.clientX,
+                        clientY: touch.clientY
+                    });
+                    this.drawingCanvas.dispatchEvent(mouseEvent);
+                });
+
+                this.drawingCanvas.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const mouseEvent = new MouseEvent('mousemove', {
+                        clientX: touch.clientX,
+                        clientY: touch.clientY
+                    });
+                    this.drawingCanvas.dispatchEvent(mouseEvent);
+                });
+
+                this.drawingCanvas.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    const mouseEvent = new MouseEvent('mouseup', {});
+                    this.drawingCanvas.dispatchEvent(mouseEvent);
+                });
+            }
+
+            startDrawing(e) {
+                this.isDrawing = true;
+                const rect = this.drawingCanvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                this.drawingCtx.beginPath();
+                this.drawingCtx.moveTo(x, y);
+                this.drawingData.push({x, y, type: 'start'});
+                
+                document.querySelector('.drawing-indicator').classList.add('active');
+                document.getElementById('drawingCanvas').classList.add('drawing');
+                
+                if (!this.hasDrawn) {
+                    this.hasDrawn = true;
+                    document.getElementById('emptyState').classList.add('hidden');
+                }
+            }
+
+            draw(e) {
+                if (!this.isDrawing) return;
+                
+                const rect = this.drawingCanvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                this.drawingCtx.lineTo(x, y);
+                this.drawingCtx.stroke();
+                this.drawingData.push({x, y, type: 'draw'});
+            }
+
+            stopDrawing() {
+                if (!this.isDrawing) return;
+                this.isDrawing = false;
+                this.drawingData.push({type: 'end'});
+                document.querySelector('.drawing-indicator').classList.remove('active');
+                document.getElementById('drawingCanvas').classList.remove('drawing');
+            }
+
+            switchCanvas(canvasType) {
+                document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+                const activeTab = document.querySelector(`[data-canvas="${canvasType}"]`);
+                activeTab.classList.add('active');
+                
+                // Add a subtle animation when switching
+                const canvasWrapper = document.querySelector('.canvas-wrapper');
+                canvasWrapper.style.opacity = '0';
+                
+                setTimeout(() => {
+                    if (canvasType === 'drawing') {
+                        this.drawingCanvas.style.display = 'block';
+                        this.resultCanvas.style.display = 'none';
+                        // Show empty state only if nothing has been drawn
+                        if (!this.hasDrawn) {
+                            document.getElementById('emptyState').classList.remove('hidden');
+                        }
+                    } else {
+                        this.drawingCanvas.style.display = 'none';
+                        this.resultCanvas.style.display = 'block';
+                        // Always hide empty state on result canvas
+                        document.getElementById('emptyState').classList.add('hidden');
+                    }
+                    canvasWrapper.style.opacity = '1';
+                }, 150);
+            }
+
+            generateArt() {
+                if (this.drawingData.length === 0) {
+                    this.showMessage('Please draw something first!', 'error');
+                    return;
+                }
+
+                const loading = document.getElementById('loading');
+                loading.classList.add('active');
+
+                setTimeout(() => {
+                    this.resultCtx.clearRect(0, 0, this.resultCanvas.width, this.resultCanvas.height);
+                    
+                    // Apply selected algorithm
+                    switch (this.currentAlgorithm) {
+                        case 'spiral':
+                            this.generateSpiral();
+                            break;
+                        case 'mandala':
+                            this.generateMandala();
+                            break;
+                        case 'fractal':
+                            this.generateFractal();
+                            break;
+                        case 'wave':
+                            this.generateWave();
+                            break;
+                        case 'particle':
+                            this.generateParticle();
+                            break;
+                        case 'geometric':
+                            this.generateGeometric();
+                            break;
+                    }
+
+                    loading.classList.remove('active');
+                    this.switchCanvas('result');
+                }, 300);
+            }
+
+            generateSpiral() {
+                const centerX = this.resultCanvas.width / 2;
+                const centerY = this.resultCanvas.height / 2;
+                const complexity = parseInt(document.getElementById('complexity').value);
+                const sizeMultiplier = parseFloat(document.getElementById('sizeMultiplier').value);
+                const rotation = parseInt(document.getElementById('rotation').value);
+                const opacity = parseFloat(document.getElementById('opacity').value);
+                
+                this.resultCtx.globalAlpha = opacity;
+                this.resultCtx.lineCap = 'round';
+                this.resultCtx.lineJoin = 'round';
+                
+                // Calculate bounds of drawing
+                const bounds = this.getDrawingBounds();
+                const drawingCenterX = (bounds.minX + bounds.maxX) / 2;
+                const drawingCenterY = (bounds.minY + bounds.maxY) / 2;
+                
+                for (let i = 0; i < complexity * 3; i++) {
+                    this.resultCtx.save();
+                    this.resultCtx.translate(centerX, centerY);
+                    this.resultCtx.rotate((rotation + i * 36) * Math.PI / 180);
+                    
+                    const scale = sizeMultiplier * (1 - i * 0.08);
+                    this.resultCtx.scale(scale, scale);
+                    
+                    const gradient = this.createGradient();
+                    this.resultCtx.strokeStyle = gradient;
+                    this.resultCtx.lineWidth = 2 + i * 0.3;
+                    
+                    this.drawTransformedPath(-drawingCenterX, -drawingCenterY);
+                    this.resultCtx.restore();
+                }
+            }
+
+            generateMandala() {
+                const centerX = this.resultCanvas.width / 2;
+                const centerY = this.resultCanvas.height / 2;
+                const complexity = parseInt(document.getElementById('complexity').value);
+                const sizeMultiplier = parseFloat(document.getElementById('sizeMultiplier').value);
+                const opacity = parseFloat(document.getElementById('opacity').value);
+                
+                this.resultCtx.globalAlpha = opacity;
+                this.resultCtx.lineCap = 'round';
+                this.resultCtx.lineJoin = 'round';
+                
+                const segments = complexity + 4;
+                const bounds = this.getDrawingBounds();
+                const drawingCenterX = (bounds.minX + bounds.maxX) / 2;
+                const drawingCenterY = (bounds.minY + bounds.maxY) / 2;
+                
+                for (let i = 0; i < segments; i++) {
+                    this.resultCtx.save();
+                    this.resultCtx.translate(centerX, centerY);
+                    this.resultCtx.rotate((360 / segments * i) * Math.PI / 180);
+                    this.resultCtx.scale(sizeMultiplier, sizeMultiplier);
+                    
+                    const gradient = this.createGradient();
+                    this.resultCtx.strokeStyle = gradient;
+                    this.resultCtx.lineWidth = 2;
+                    
+                    // Draw original
+                    this.drawTransformedPath(-drawingCenterX, -drawingCenterY);
+                    
+                    // Draw mirrored
+                    this.resultCtx.scale(-1, 1);
+                    this.drawTransformedPath(-drawingCenterX, -drawingCenterY);
+                    
+                    this.resultCtx.restore();
+                }
+            }
+
+            generateFractal() {
+                const complexity = parseInt(document.getElementById('complexity').value);
+                const sizeMultiplier = parseFloat(document.getElementById('sizeMultiplier').value);
+                const opacity = parseFloat(document.getElementById('opacity').value);
+                
+                this.resultCtx.globalAlpha = opacity;
+                this.resultCtx.lineCap = 'round';
+                this.resultCtx.lineJoin = 'round';
+                
+                const bounds = this.getDrawingBounds();
+                const drawingCenterX = (bounds.minX + bounds.maxX) / 2;
+                const drawingCenterY = (bounds.minY + bounds.maxY) / 2;
+                
+                const drawFractalLevel = (level, scale, offsetX, offsetY, rotation = 0) => {
+                    if (level <= 0) return;
+                    
+                    this.resultCtx.save();
+                    this.resultCtx.translate(offsetX, offsetY);
+                    this.resultCtx.rotate(rotation);
+                    this.resultCtx.scale(scale, scale);
+                    
+                    const gradient = this.createGradient();
+                    this.resultCtx.strokeStyle = gradient;
+                    this.resultCtx.lineWidth = Math.max(1, level * 0.5);
+                    
+                    this.drawTransformedPath(-drawingCenterX, -drawingCenterY);
+                    this.resultCtx.restore();
+                    
+                    // Recursive calls with rotation
+                    const newScale = scale * 0.5;
+                    const offset = 100 * scale;
+                    const angleStep = Math.PI / 3;
+                    
+                    for (let i = 0; i < 6; i++) {
+                        const angle = i * angleStep;
+                        const newX = offsetX + Math.cos(angle) * offset;
+                        const newY = offsetY + Math.sin(angle) * offset;
+                        drawFractalLevel(level - 1, newScale, newX, newY, rotation + angleStep);
+                    }
+                };
+                
+                drawFractalLevel(
+                    Math.min(complexity, 5), 
+                    sizeMultiplier * 0.3, 
+                    this.resultCanvas.width / 2, 
+                    this.resultCanvas.height / 2
+                );
+            }
+
+            generateWave() {
+                const complexity = parseInt(document.getElementById('complexity').value);
+                const sizeMultiplier = parseFloat(document.getElementById('sizeMultiplier').value);
+                const opacity = parseFloat(document.getElementById('opacity').value);
+                
+                this.resultCtx.globalAlpha = opacity;
+                this.resultCtx.lineCap = 'round';
+                this.resultCtx.lineJoin = 'round';
+                
+                for (let wave = 0; wave < complexity; wave++) {
+                    this.resultCtx.save();
+                    
+                    const amplitude = 20 + wave * 10;
+                    const frequency = 0.02 + wave * 0.005;
+                    const phase = wave * Math.PI / 4;
+                    
+                    this.resultCtx.beginPath();
+                    let isDrawing = false;
+                    
+                    this.drawingData.forEach((point, index) => {
+                        if (point.type === 'start') {
+                            isDrawing = true;
+                            const waveX = point.x + Math.sin(point.y * frequency + phase) * amplitude * sizeMultiplier;
+                            const waveY = point.y + Math.cos(point.x * frequency + phase) * amplitude * sizeMultiplier;
+                            this.resultCtx.moveTo(waveX, waveY);
+                        } else if (point.type === 'draw' && isDrawing) {
+                            const waveX = point.x + Math.sin(point.y * frequency + phase) * amplitude * sizeMultiplier;
+                            const waveY = point.y + Math.cos(point.x * frequency + phase) * amplitude * sizeMultiplier;
+                            this.resultCtx.lineTo(waveX, waveY);
+                        } else if (point.type === 'end') {
+                            isDrawing = false;
+                        }
+                    });
+                    
+                    const gradient = this.createGradient();
+                    this.resultCtx.strokeStyle = gradient;
+                    this.resultCtx.lineWidth = 2 + wave * 0.5;
+                    this.resultCtx.stroke();
+                    this.resultCtx.restore();
+                }
+            }
+
+            generateParticle() {
+                const complexity = parseInt(document.getElementById('complexity').value);
+                const sizeMultiplier = parseFloat(document.getElementById('sizeMultiplier').value);
+                const opacity = parseFloat(document.getElementById('opacity').value);
+                const primaryColor = document.getElementById('primaryColor').value;
+                const secondaryColor = document.getElementById('secondaryColor').value;
+                
+                this.resultCtx.globalAlpha = opacity * 0.6;
+                
+                const drawPoints = this.drawingData.filter(p => p.type === 'draw' || p.type === 'start');
+                const step = Math.max(1, Math.floor(drawPoints.length / (complexity * 10)));
+                
+                drawPoints.forEach((point, index) => {
+                    if (index % step === 0) {
+                        for (let i = 0; i < complexity; i++) {
+                            const angle = (i * 360 / complexity) * Math.PI / 180;
+                            const distance = (Math.random() * 30 + 10) * sizeMultiplier;
+                            const particleX = point.x + Math.cos(angle) * distance;
+                            const particleY = point.y + Math.sin(angle) * distance;
+                            const size = (Math.random() * 3 + 2) * sizeMultiplier;
+                            
+                            this.resultCtx.save();
+                            const gradient = this.resultCtx.createRadialGradient(
+                                particleX, particleY, 0,
+                                particleX, particleY, size * 2
+                            );
+                            gradient.addColorStop(0, primaryColor);
+                            gradient.addColorStop(0.5, secondaryColor);
+                            gradient.addColorStop(1, 'transparent');
+                            
+                            this.resultCtx.fillStyle = gradient;
+                            this.resultCtx.beginPath();
+                            this.resultCtx.arc(particleX, particleY, size, 0, Math.PI * 2);
+                            this.resultCtx.fill();
+                            this.resultCtx.restore();
+                        }
+                    }
+                });
+                
+                // Draw the original path faintly
+                this.resultCtx.globalAlpha = opacity * 0.3;
+                this.resultCtx.strokeStyle = this.createGradient();
+                this.resultCtx.lineWidth = 1;
+                this.drawPath();
+            }
+
+            generateGeometric() {
+                const complexity = parseInt(document.getElementById('complexity').value);
+                const sizeMultiplier = parseFloat(document.getElementById('sizeMultiplier').value);
+                const rotation = parseInt(document.getElementById('rotation').value);
+                const opacity = parseFloat(document.getElementById('opacity').value);
+                
+                this.resultCtx.globalAlpha = opacity;
+                this.resultCtx.lineCap = 'round';
+                this.resultCtx.lineJoin = 'round';
+                
+                // Clear canvas first
+                this.resultCtx.clearRect(0, 0, this.resultCanvas.width, this.resultCanvas.height);
+                
+                // Draw the original path
+                this.resultCtx.save();
+                this.resultCtx.strokeStyle = this.createGradient();
+                this.resultCtx.lineWidth = 2;
+                this.resultCtx.globalAlpha = opacity * 0.5;
+                this.drawPath();
+                this.resultCtx.restore();
+                
+                // Get all drawing points
+                const drawPoints = this.drawingData.filter(p => p.type === 'draw' || p.type === 'start');
+                
+                if (drawPoints.length === 0) return;
+                
+                // Calculate step based on complexity
+                const step = Math.max(1, Math.floor(drawPoints.length / (complexity * 3)));
+                
+                // Draw geometric shapes along the path
+                for (let i = 0; i < drawPoints.length; i += step) {
+                    const point = drawPoints[i];
+                    
+                    // Draw multiple shapes at each point
+                    for (let j = 0; j < 3; j++) {
+                        this.resultCtx.save();
+                        this.resultCtx.translate(point.x, point.y);
+                        
+                        // Apply rotation
+                        const currentRotation = (rotation + j * 120 + i * 10) * Math.PI / 180;
+                        this.resultCtx.rotate(currentRotation);
+                        
+                        // Calculate size based on position and multiplier
+                        const size = (8 + j * 4) * sizeMultiplier;
+                        
+                        // Create gradient for this shape
+                        const gradient = this.createGradient();
+                        this.resultCtx.strokeStyle = gradient;
+                        this.resultCtx.lineWidth = 2;
+                        this.resultCtx.globalAlpha = opacity * (0.8 - j * 0.2);
+                        
+                        // Choose shape type based on position
+                        const shapeType = (i + j) % 3;
+                        
+                        this.resultCtx.beginPath();
+                        
+                        switch (shapeType) {
+                            case 0: // Triangle
+                                this.resultCtx.moveTo(0, -size);
+                                this.resultCtx.lineTo(-size * 0.866, size * 0.5);
+                                this.resultCtx.lineTo(size * 0.866, size * 0.5);
+                                this.resultCtx.closePath();
+                                break;
+                                
+                            case 1: // Square
+                                this.resultCtx.rect(-size/2, -size/2, size, size);
+                                break;
+                                
+                            case 2: // Circle
+                                this.resultCtx.arc(0, 0, size/2, 0, Math.PI * 2);
+                                break;
+                        }
+                        
+                        this.resultCtx.stroke();
+                        
+                        // Also fill with lower opacity
+                        this.resultCtx.globalAlpha = opacity * 0.1;
+                        this.resultCtx.fillStyle = gradient;
+                        this.resultCtx.fill();
+                        
+                        this.resultCtx.restore();
+                    }
+                }
+            }
+
+            getDrawingBounds() {
+                let minX = Infinity, minY = Infinity;
+                let maxX = -Infinity, maxY = -Infinity;
+                
+                this.drawingData.forEach(point => {
+                    if (point.type === 'start' || point.type === 'draw') {
+                        minX = Math.min(minX, point.x);
+                        minY = Math.min(minY, point.y);
+                        maxX = Math.max(maxX, point.x);
+                        maxY = Math.max(maxY, point.y);
+                    }
+                });
+                
+                return { minX, minY, maxX, maxY };
+            }
+
+            drawTransformedPath(offsetX = 0, offsetY = 0) {
+                this.resultCtx.beginPath();
+                let isDrawing = false;
+                
+                this.drawingData.forEach(point => {
+                    if (point.type === 'start') {
+                        this.resultCtx.moveTo(point.x + offsetX, point.y + offsetY);
+                        isDrawing = true;
+                    } else if (point.type === 'draw' && isDrawing) {
+                        this.resultCtx.lineTo(point.x + offsetX, point.y + offsetY);
+                    } else if (point.type === 'end') {
+                        isDrawing = false;
+                    }
+                });
+                
+                this.resultCtx.stroke();
+            }
+
+            createGradient() {
+                const primaryColor = document.getElementById('primaryColor').value;
+                const secondaryColor = document.getElementById('secondaryColor').value;
+                
+                const gradient = this.resultCtx.createLinearGradient(0, 0, this.resultCanvas.width, this.resultCanvas.height);
+                gradient.addColorStop(0, primaryColor);
+                gradient.addColorStop(0.5, secondaryColor);
+                gradient.addColorStop(1, primaryColor);
+                return gradient;
+            }
+
+            drawPath() {
+                this.resultCtx.beginPath();
+                let isDrawing = false;
+                
+                this.drawingData.forEach(point => {
+                    if (point.type === 'start') {
+                        this.resultCtx.moveTo(point.x, point.y);
+                        isDrawing = true;
+                    } else if (point.type === 'draw' && isDrawing) {
+                        this.resultCtx.lineTo(point.x, point.y);
+                    } else if (point.type === 'end') {
+                        isDrawing = false;
+                    }
+                });
+                
+                this.resultCtx.stroke();
+            }
+
+            clearCanvas() {
+                this.drawingCtx.clearRect(0, 0, this.drawingCanvas.width, this.drawingCanvas.height);
+                this.resultCtx.clearRect(0, 0, this.resultCanvas.width, this.resultCanvas.height);
+                this.drawingData = [];
+                this.hasDrawn = false;
+                // Only show empty state if we're on the drawing canvas
+                const activeCanvas = document.querySelector('.tab.active').dataset.canvas;
+                if (activeCanvas === 'drawing') {
+                    document.getElementById('emptyState').classList.remove('hidden');
+                }
+                this.switchCanvas('drawing');
+            }
+
+            saveArt() {
+                const canvas = document.querySelector('.tab.active').dataset.canvas === 'drawing' 
+                    ? this.drawingCanvas 
+                    : this.resultCanvas;
+                
+                const link = document.createElement('a');
+                link.download = `algorithmic-art-${Date.now()}.png`;
+                link.href = canvas.toDataURL();
+                link.click();
+                
+                this.showMessage('Art saved successfully!', 'success');
+            }
+
+            showMessage(text, type = 'success') {
+                const message = document.getElementById('successMessage');
+                message.textContent = text;
+                message.style.background = type === 'success' ? '#34c759' : '#ff3b30';
+                message.classList.add('show');
+                
+                setTimeout(() => {
+                    message.classList.remove('show');
+                }, 3000);
+            }
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            new ArtGenerator();
+        });
+    </script>
+</body>
+</html>
